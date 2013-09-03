@@ -5,6 +5,10 @@ import scala.xml._
 import org.xml.sax.{SAXNotRecognizedException, SAXNotSupportedException}
 import com.sun.org.apache.xerces.internal.jaxp.SAXParserFactoryImpl
 import javax.xml.parsers.ParserConfigurationException
+import au.com.bytecode.opencsv.CSVReader
+import scala.collection.JavaConversions._
+import java.io._
+
 
 
 //Used to speed html page parsing by not validating DTD
@@ -22,27 +26,53 @@ class NoDTDXMLParserFactory extends SAXParserFactoryImpl() {
 
 object LuxElectionImport {
 
-  val electionSiteUrl = "http://www.elections.public.lu/fr/elections-legislatives/2009/resultats/communes/"
-
-  def resultUrl(town: String) = electionSiteUrl + town + "/index.html"
+  def resultUrl(year: String, town: String) = "http://www.elections.public.lu/fr/elections-legislatives/" + year + "/resultats/communes/" + town + "/index.html"
 
   def main(args: Array[String]) {
+    //Change default parser in order not to validate DTD
     System.setProperty("javax.xml.parsers.SAXParserFactory", "com.intech.luxdataimport.NoDTDXMLParserFactory")
-    val tables = resultTables(loadTown("luxembourg"))
-    val results = (2 to 8).map(tables(_))
-    println(getContent(results(3)))
+
+    val in = getClass.getResourceAsStream("/towns.csv")
+    val out = new java.io.PrintWriter(new java.io.FileWriter("./result.csv"))
+    out.println("annee,canton,commune,parti,candidat,suffrages")
+    val towns = new CSVReader(new InputStreamReader(in), ',')
+    for (row <- towns.readAll) {
+      val canton = row(0)
+      val town = row(1)
+      val townResults = parseTown("2009", canton, town)
+      townResults.map(line => out.println(line.mkString(",")))
+      println(town + "-> OK " + townResults.size + " records parsed")
+    }
+    out.flush
   }
 
   def getTableTitle(table: NodeSeq) = (table \\ "thead" \\ "a")(0).text
 
-  def getContent(table: NodeSeq) = (table \\ "tr").map(_ \\ "td").filter(_.size > 1).map(ns => ns(0).text -> ns(1).text)
+  def loadPage(pageUrl: String) = XML.load(new java.net.URL(pageUrl))
 
-  def loadPage(pageUrl: String) = {
-    XML.load(new java.net.URL(pageUrl))
-  }
 
-  def loadTown(town: String) = loadPage(resultUrl(town))
+  /**
+   *
+   * @param town
+   * @return Tha html result page for the given town, parsed with scala XML utility
+   */
+  def loadTown(year: String, town: String) = loadPage(resultUrl(year, town))
 
+  /**
+   *
+   * @param htmlTownPage
+   * @return The list of htmml tables included in the page
+   */
   def resultTables(htmlTownPage: Elem) = htmlTownPage \\ "table"
+
+  def parseTown(year: String, canton: String, town: String) = {
+    val tables = resultTables(loadTown(year, town.toLowerCase))
+    val results = (2 to 8).map(tables(_))
+    results.map{ table =>
+      val party = getTableTitle(table).substring(4)
+      //
+      (table \\ "tr").map(_ \\ "td").filter(_.size > 1).drop(2).map(ns => List(year, canton, town, party, ns(0).text, ns(1).text))
+    }.flatten
+  }
 }
 
