@@ -71,7 +71,11 @@ object LuxElectionImport {
     results.map{ table =>
       val party = getTableTitle(table).substring(4)
       //
-      (table \\ "tr").map(_ \\ "td").filter(_.size > 1).drop(2).map(ns => List(year, canton, town, party, ns(0).text, ns(1).text))
+      (table \\ "tr") // Retrieve lines
+        .map(_ \\ "td") // Retrieves cells
+        .filter(_.size > 1) // Skip if line is empty
+        .drop(2) // Skip the 2 first lines because they arre consolidated data
+        .map(ns => List(year, canton, town, party, ns(0).text, ns(1).text)) // Create the result
     }.flatten
   }
 }
