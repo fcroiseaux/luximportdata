@@ -9,7 +9,7 @@ src_managed/
 project/boot/
 project/plugins/project/
 
-#IntelliJ specific
+# IntelliJ specific
 .idea
 .idea_modules
 
